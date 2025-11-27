@@ -1,0 +1,1396 @@
+openapi: 3.1.0
+info:
+  title: Dependable Call Exchange API
+  version: 1.0.0
+  description: >
+    Core API for Dependable Call Exchange (DCX). Covers telephony webhook,
+    internal routing, admin CRUD, calls reporting, and buyer conversion events.
+
+servers:
+  - url: https://api.dcx.local
+    description: Primary API server
+
+security:
+  - adminBearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+
+  /twilio/voice:
+    post:
+      summary: Twilio Voice webhook
+      description: |
+        Primary Twilio Voice webhook endpoint. Handles inbound calls and status callbacks.
+        Responds with TwiML.
+
+        NOTE: Implementation MUST validate the X-Twilio-Signature header and
+        return 403 for invalid signatures to prevent spoofed requests.
+      operationId: handleTwilioVoice
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioVoiceWebhookRequest'
+      responses:
+        '200':
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+                description: TwiML XML response
+        '400':
+          description: Invalid request or missing required params
+        '403':
+          description: Invalid Twilio signature (failed X-Twilio-Signature validation)
+
+  /internal/routing/decide:
+    post:
+      summary: Internal routing decision
+      description: >
+        Given campaign/supplier/call metadata, returns the selected buyer endpoint
+        and related routing details. Internal use only.
+      operationId: decideRoute
+      security:
+        - adminBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingDecisionRequest'
+      responses:
+        '200':
+          description: Successful routing decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingDecisionResponse'
+        '400':
+          description: Invalid routing input
+        '404':
+          description: No eligible buyer routes found
+
+  /api/suppliers:
+    get:
+      summary: List suppliers
+      operationId: listSuppliers
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of suppliers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSuppliers'
+    post:
+      summary: Create supplier
+      operationId: createSupplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierInput'
+      responses:
+        '201':
+          description: Supplier created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+
+  /api/suppliers/{id}:
+    get:
+      summary: Get supplier by ID
+      operationId: getSupplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '404':
+          description: Supplier not found
+    patch:
+      summary: Update supplier
+      operationId: updateSupplier
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierUpdate'
+      responses:
+        '200':
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+        '404':
+          description: Supplier not found
+
+  /api/buyers:
+    get:
+      summary: List buyers
+      operationId: listBuyers
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of buyers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBuyers'
+    post:
+      summary: Create buyer
+      operationId: createBuyer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyerInput'
+      responses:
+        '201':
+          description: Buyer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Buyer'
+
+  /api/buyers/{id}:
+    get:
+      summary: Get buyer
+      operationId: getBuyer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Buyer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Buyer'
+        '404':
+          description: Buyer not found
+    patch:
+      summary: Update buyer
+      operationId: updateBuyer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyerUpdate'
+      responses:
+        '200':
+          description: Updated buyer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Buyer'
+        '404':
+          description: Buyer not found
+
+  /api/campaigns:
+    get:
+      summary: List campaigns
+      operationId: listCampaigns
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of campaigns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCampaigns'
+    post:
+      summary: Create campaign
+      operationId: createCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignInput'
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+
+  /api/campaigns/{id}:
+    get:
+      summary: Get campaign
+      operationId: getCampaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found
+    patch:
+      summary: Update campaign
+      operationId: updateCampaign
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignUpdate'
+      responses:
+        '200':
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campaign not found
+
+  /api/offers:
+    get:
+      summary: List offers
+      operationId: listOffers
+      parameters:
+        - in: query
+          name: campaign_id
+          schema:
+            type: string
+        - in: query
+          name: buyer_id
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of offers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOffers'
+    post:
+      summary: Create offer
+      operationId: createOffer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferInput'
+      responses:
+        '201':
+          description: Offer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+
+  /api/offers/{id}:
+    get:
+      summary: Get offer
+      operationId: getOffer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Offer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '404':
+          description: Offer not found
+    patch:
+      summary: Update offer
+      operationId: updateOffer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferUpdate'
+      responses:
+        '200':
+          description: Updated offer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '404':
+          description: Offer not found
+
+  /api/numbers:
+    get:
+      summary: List phone numbers
+      operationId: listPhoneNumbers
+      parameters:
+        - in: query
+          name: campaign_id
+          schema:
+            type: string
+        - in: query
+          name: supplier_id
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of phone numbers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPhoneNumbers'
+
+  /api/numbers/purchase:
+    post:
+      summary: Purchase and assign phone numbers from Twilio
+      operationId: purchasePhoneNumbers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NumberPurchaseRequest'
+      responses:
+        '201':
+          description: Phone numbers purchased
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PhoneNumber'
+
+  /api/calls:
+    get:
+      summary: List call sessions
+      operationId: listCallSessions
+      parameters:
+        - in: query
+          name: from
+          description: Start of date range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          description: End of date range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: campaign_id
+          schema:
+            type: string
+        - in: query
+          name: supplier_id
+          schema:
+            type: string
+        - in: query
+          name: buyer_id
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - INITIATED
+              - RINGING
+              - IN_PROGRESS
+              - COMPLETED
+              - FAILED
+              - BUSY
+              - NO_ANSWER
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: Paginated list of call sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCallSessions'
+
+  /api/calls/{id}:
+    get:
+      summary: Get call session
+      operationId: getCallSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Call session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallSession'
+        '404':
+          description: Call session not found
+
+  /api/conversions:
+    post:
+      summary: Record conversion event (buyer → DCX)
+      operationId: createConversionEvent
+      security:
+        - buyerApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversionEventCreateRequest'
+      responses:
+        '201':
+          description: Conversion event recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionEventCreateResponse'
+        '400':
+          description: Invalid payload
+        '404':
+          description: Call not found
+
+components:
+  securitySchemes:
+    adminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    buyerApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        uptime_seconds:
+          type: number
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - total
+        - page
+        - limit
+
+    PaginatedSuppliers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Supplier'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    PaginatedBuyers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Buyer'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    PaginatedCampaigns:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    PaginatedOffers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Offer'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    PaginatedPhoneNumbers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhoneNumber'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    PaginatedCallSessions:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallSession'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - data
+        - meta
+
+    TwilioVoiceWebhookRequest:
+      type: object
+      description: >
+        Subset of Twilio Voice webhook params used by DCX. Additional parameters
+        may be present and MUST be ignored, not rejected.
+      additionalProperties: true
+      properties:
+        CallSid:
+          type: string
+        From:
+          type: string
+          description: Caller phone number (E.164)
+        To:
+          type: string
+          description: Called (destination) number (E.164)
+        CallStatus:
+          type: string
+          description: Twilio call status
+        Direction:
+          type: string
+        ApiVersion:
+          type: string
+      required:
+        - CallSid
+        - From
+        - To
+        - CallStatus
+
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [INTERNAL_CALL_CENTER, EXTERNAL_PUBLISHER, NETWORK]
+        contact_email:
+          type: string
+          nullable: true
+          format: email
+        contact_phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - status
+        - created_at
+        - updated_at
+
+    SupplierInput:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [INTERNAL_CALL_CENTER, EXTERNAL_PUBLISHER, NETWORK]
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+        contact_phone:
+          type: string
+          nullable: true
+      required:
+        - name
+        - type
+
+    SupplierUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [INTERNAL_CALL_CENTER, EXTERNAL_PUBLISHER, NETWORK]
+        contact_email:
+          type: string
+          format: email
+          nullable: true
+        contact_phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    Buyer:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        endpoint_type:
+          type: string
+          enum: [PHONE_NUMBER, SIP]
+        endpoint_value:
+          type: string
+        concurrency_limit:
+          type: integer
+          minimum: 1
+        daily_cap:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+        schedule_timezone:
+          type: string
+          nullable: true
+        schedule_rules:
+          description: JSON object with hours-of-operation rules
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - endpoint_type
+        - endpoint_value
+        - concurrency_limit
+        - status
+        - weight
+        - created_at
+        - updated_at
+
+    BuyerInput:
+      type: object
+      properties:
+        name:
+          type: string
+        endpoint_type:
+          type: string
+          enum: [PHONE_NUMBER, SIP]
+        endpoint_value:
+          type: string
+        concurrency_limit:
+          type: integer
+          minimum: 1
+        daily_cap:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        schedule_timezone:
+          type: string
+          nullable: true
+        schedule_rules:
+          nullable: true
+          description: JSON object with hours-of-operation rules
+      required:
+        - name
+        - endpoint_type
+        - endpoint_value
+        - concurrency_limit
+
+    BuyerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        endpoint_type:
+          type: string
+          enum: [PHONE_NUMBER, SIP]
+        endpoint_value:
+          type: string
+        concurrency_limit:
+          type: integer
+        daily_cap:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+        schedule_timezone:
+          type: string
+          nullable: true
+        schedule_rules:
+          nullable: true
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        vertical:
+          type: string
+        geo_rules:
+          nullable: true
+          description: JSON object of allowed regions/states
+        supplier_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        recording_default_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - vertical
+        - status
+        - recording_default_enabled
+        - created_at
+        - updated_at
+
+    CampaignInput:
+      type: object
+      properties:
+        name:
+          type: string
+        vertical:
+          type: string
+        geo_rules:
+          nullable: true
+        supplier_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+        recording_default_enabled:
+          type: boolean
+          default: true
+      required:
+        - name
+        - vertical
+
+    CampaignUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        vertical:
+          type: string
+        geo_rules:
+          nullable: true
+        supplier_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        recording_default_enabled:
+          type: boolean
+
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+        buyer_id:
+          type: string
+        campaign_id:
+          type: string
+        pricing_model:
+          type: string
+          enum: [CPA, FIXED, CPC, REVSHARE]
+        payout_cents:
+          type: integer
+          minimum: 0
+        buffer_seconds:
+          type: integer
+          minimum: 0
+        attribution_window_days:
+          type: integer
+          minimum: 0
+        daily_cap:
+          type: integer
+          nullable: true
+        priority:
+          type: integer
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - buyer_id
+        - campaign_id
+        - pricing_model
+        - payout_cents
+        - buffer_seconds
+        - attribution_window_days
+        - priority
+        - weight
+        - is_active
+        - created_at
+        - updated_at
+
+    OfferInput:
+      type: object
+      properties:
+        buyer_id:
+          type: string
+        campaign_id:
+          type: string
+        pricing_model:
+          type: string
+          enum: [CPA, FIXED, CPC, REVSHARE]
+        payout_cents:
+          type: integer
+          minimum: 0
+        buffer_seconds:
+          type: integer
+          minimum: 0
+          default: 60
+        attribution_window_days:
+          type: integer
+          minimum: 0
+          default: 30
+        daily_cap:
+          type: integer
+          nullable: true
+        priority:
+          type: integer
+          default: 100
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        is_active:
+          type: boolean
+          default: true
+      required:
+        - buyer_id
+        - campaign_id
+        - pricing_model
+        - payout_cents
+
+    OfferUpdate:
+      type: object
+      properties:
+        pricing_model:
+          type: string
+          enum: [CPA, FIXED, CPC, REVSHARE]
+        payout_cents:
+          type: integer
+        buffer_seconds:
+          type: integer
+        attribution_window_days:
+          type: integer
+        daily_cap:
+          type: integer
+          nullable: true
+        priority:
+          type: integer
+        weight:
+          type: integer
+        is_active:
+          type: boolean
+
+    PhoneNumber:
+      type: object
+      properties:
+        id:
+          type: string
+        twilio_sid:
+          type: string
+        e164:
+          type: string
+        campaign_id:
+          type: string
+        supplier_id:
+          type: string
+        pool_type:
+          type: string
+          enum: [STATIC, DYNAMIC]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        trust_profile_id:
+          type: string
+          nullable: true
+        stir_shaken_attestation:
+          type: string
+          enum: [A, B, C, UNKNOWN]
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - twilio_sid
+        - e164
+        - campaign_id
+        - supplier_id
+        - pool_type
+        - status
+        - created_at
+        - updated_at
+
+    NumberPurchaseRequest:
+      type: object
+      properties:
+        country:
+          type: string
+          example: US
+        area_code:
+          type: string
+          example: "305"
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        campaign_id:
+          type: string
+        supplier_id:
+          type: string
+        pool_type:
+          type: string
+          enum: [STATIC, DYNAMIC]
+      required:
+        - country
+        - quantity
+        - campaign_id
+        - supplier_id
+        - pool_type
+
+    CallSession:
+      type: object
+      properties:
+        id:
+          type: string
+        public_id:
+          type: string
+        trace_id:
+          type: string
+        twilio_call_sid:
+          type: string
+        from_number:
+          type: string
+        to_number:
+          type: string
+        campaign_id:
+          type: string
+        supplier_id:
+          type: string
+        buyer_id:
+          type: string
+          nullable: true
+        offer_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - INITIATED
+            - RINGING
+            - IN_PROGRESS
+            - COMPLETED
+            - FAILED
+            - BUSY
+            - NO_ANSWER
+        created_at:
+          type: string
+          format: date-time
+        answered_at:
+          type: string
+          format: date-time
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_seconds:
+          type: integer
+        billable_duration_seconds:
+          type: integer
+        telephony_cost_cents:
+          type: integer
+        revenue_estimated_cents:
+          type: integer
+        recording_enabled:
+          type: boolean
+        recording_url:
+          type: string
+          nullable: true
+        recording_consent_source:
+          type: string
+          enum: [IMPLICIT_IVR, AGENT_VERBAL, NONE]
+          nullable: true
+        transcription_status:
+          type: string
+          enum: [NONE, PENDING, COMPLETED, FAILED]
+        transcription_text:
+          type: string
+          nullable: true
+        sentiment_score:
+          type: number
+          nullable: true
+          minimum: -1
+          maximum: 1
+        llm_qa_score:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - public_id
+        - trace_id
+        - twilio_call_sid
+        - from_number
+        - to_number
+        - campaign_id
+        - supplier_id
+        - status
+        - created_at
+        - duration_seconds
+        - billable_duration_seconds
+        - telephony_cost_cents
+        - revenue_estimated_cents
+        - recording_enabled
+        - transcription_status
+        - updated_at
+
+    ConversionEventCreateRequest:
+      type: object
+      properties:
+        call_public_id:
+          type: string
+        buyer_id:
+          type: string
+        event_type:
+          type: string
+          example: CASE_FILED
+        event_time:
+          type: string
+          format: date-time
+        revenue_cents:
+          type: integer
+          nullable: true
+      required:
+        - call_public_id
+        - buyer_id
+        - event_type
+        - event_time
+
+    ConversionEventCreateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        call_session_id:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED]
+      required:
+        - id
+        - call_session_id
+        - status
+
+    RoutingDecisionRequest:
+      type: object
+      properties:
+        campaign_id:
+          type: string
+        supplier_id:
+          type: string
+        from_number:
+          type: string
+        to_number:
+          type: string
+        geo:
+          type: object
+          nullable: true
+          properties:
+            country:
+              type: string
+            state:
+              type: string
+              nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - campaign_id
+        - supplier_id
+        - from_number
+        - to_number
+        - timestamp
+
+    RoutingDecisionResponse:
+      type: object
+      properties:
+        buyer_id:
+          type: string
+        offer_id:
+          type: string
+        destination_type:
+          type: string
+          enum: [PHONE_NUMBER, SIP]
+        destination_value:
+          type: string
+        max_ring_seconds:
+          type: integer
+        max_call_duration_seconds:
+          type: integer
+      required:
+        - buyer_id
+        - offer_id
+        - destination_type
+        - destination_value
+        - max_ring_seconds
+        - max_call_duration_seconds
