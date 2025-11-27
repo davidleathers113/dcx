@@ -1,0 +1,38 @@
+{
+    "name": "dcx-backend",
+    "version": "1.0.0",
+    "description": "Dependable Call Exchange (DCX) backend - Node.js/Express + TypeScript + Prisma",
+    "main": "dist/server.js",
+    "scripts": {
+        "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+        "build": "tsc",
+        "start": "node dist/server.js",
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "prisma migrate dev",
+        "openapi:types": "openapi-typescript ../openapi/dcx.yaml -o src/types/api.d.ts"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.18.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.0",
+        "express": "^4.21.0",
+        "helmet": "^7.0.0",
+        "http-errors": "^2.0.0",
+        "morgan": "^1.10.0",
+        "twilio": "^5.4.0"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/morgan": "^1.9.9",
+        "@types/node": "^22.5.0",
+        "nodemon": "^3.1.0",
+        "openapi-typescript": "^7.10.1",
+        "prisma": "^5.18.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.6.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
