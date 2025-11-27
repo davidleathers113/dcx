@@ -13,7 +13,21 @@ import { routingRouter } from './modules/routing/routing.controller';
 import { adminRouter } from './modules/admin/admin.controller';
 import { reportingRouter } from './modules/reporting/reporting.controller';
 import { conversionRouter } from './modules/conversion/conversion.controller';
+import { campaignsRouter } from './modules/campaigns/campaigns.controller';
+import { suppliersRouter } from './modules/suppliers/suppliers.controller';
+import { buyersRouter } from './modules/buyers/buyers.controller';
+import { numbersRouter } from './modules/numbers/numbers.controller';
+import { settingsRouter } from './modules/settings/settings.controller';
 import { adminAuth } from './middleware/auth';
+import { performanceRouter } from './modules/performance/performance.controller';
+import { opsRouter } from './modules/ops/ops.controller';
+import { billingRouter } from './modules/billing/billing.controller';
+import { leadsRouter } from './modules/leads/leads.controller';
+import { smsRouter } from './modules/sms/sms.controller';
+import { callOpsRouter } from './modules/callops/callops.controller';
+import { ringPoolsRouter } from './modules/ringpools/ringpools.controller';
+import { schedulesRouter } from './modules/schedules/schedules.controller';
+import { trafficRouter } from './modules/traffic/traffic.controller';
 
 const app = express();
 
@@ -55,6 +69,26 @@ app.use('/api', reportingRouter);
 
 // Conversion API (offline events): /api/conversions
 app.use('/api', conversionRouter);
+// Admin API (campaigns): /api/campaigns
+app.use('/api', campaignsRouter);
+// Admin API (suppliers): /api/suppliers
+app.use('/api', suppliersRouter);
+// Admin API (buyers): /api/buyers
+app.use('/api', buyersRouter);
+// Admin API (numbers): /api/numbers
+app.use('/api', numbersRouter);
+// Admin API (settings): /api/settings
+app.use('/api', settingsRouter);
+// Observability / Ops
+app.use('/api', performanceRouter);
+app.use('/api', opsRouter);
+app.use('/api', billingRouter);
+app.use('/api', leadsRouter);
+app.use('/api', smsRouter);
+app.use('/api', callOpsRouter);
+app.use('/api', ringPoolsRouter);
+app.use('/api', schedulesRouter);
+app.use('/api', trafficRouter);
 
 // 404 handler
 app.use((req: Request, res: Response, next: NextFunction) => {

@@ -28,11 +28,13 @@ const NODE_ENV = NODE_ENV_RAW === 'production' ||
 // Validate critical env vars
 const DATABASE_URL = requireEnv('DATABASE_URL');
 const TWILIO_AUTH_TOKEN = requireEnv('TWILIO_AUTH_TOKEN');
+const ADMIN_API_KEY = requireEnv('ADMIN_API_KEY');
 const PORT = parsePort(process.env.PORT, 4000);
 exports.env = {
     NODE_ENV,
     PORT,
     DATABASE_URL,
-    TWILIO_AUTH_TOKEN
+    TWILIO_AUTH_TOKEN,
+    ADMIN_API_KEY
 };
 //# sourceMappingURL=env.js.map

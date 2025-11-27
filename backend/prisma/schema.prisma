@@ -83,6 +83,181 @@ enum AiJobStatus {
   FAILED
 }
 
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum NoticeCategory {
+  COMPLIANCE
+  CARRIER
+  RELEASE
+  PLATFORM
+}
+
+enum PlatformMigrationPhase {
+  DISCOVERY
+  BUILD
+  CUTOVER
+  VERIFY
+  COMPLETE
+}
+
+enum PlatformMigrationRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum WebhookDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum LogSeverity {
+  INFO
+  WARN
+  ERROR
+  CRITICAL
+}
+
+enum StatementStatus {
+  DRAFT
+  OPEN
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  CLEARED
+  FAILED
+}
+
+enum SecretScope {
+  TELEPHONY
+  SECURITY
+  PLATFORM
+  INTEGRATION
+  BILLING
+}
+
+enum TeamRole {
+  ADMIN
+  OPS
+  ENGINEERING
+  FINANCE
+  SUPPORT
+}
+
+enum IntegrationCategory {
+  TELEPHONY
+  CRM
+  ANALYTICS
+  NOTIFICATION
+  AUTOMATION
+}
+
+enum IntegrationStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+enum ProviderType {
+  TWILIO
+  TELNYX
+  OTHER
+}
+
+enum ProviderStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+}
+
+enum LeadStage {
+  NEW
+  REVIEW
+  QUALIFIED
+  DISQUALIFIED
+  CONVERTED
+}
+
+enum RetargetListStatus {
+  HEALTHY
+  PAUSED
+  BUILDING
+}
+
+enum ImportStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum SmsDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum SmsStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  RECEIVED
+}
+
+enum BlastStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum CallbackStatus {
+  OPEN
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+enum VoicemailStatus {
+  NEW
+  ACTIVE
+  ARCHIVED
+}
+
+enum RingPoolMode {
+  STATIC
+  DYNAMIC
+}
+
+enum ScheduleTargetType {
+  BUYER
+  CAMPAIGN
+  SUPPLIER
+  PLATFORM
+}
+
+enum RoutingExceptionType {
+  CAP_BREACH
+  BUYER_REJECT
+  TWILIO_ERROR
+  INTERNAL_ERROR
+  NO_ROUTE
+}
+
 // MODELS
 
 model Supplier {
@@ -99,6 +274,9 @@ model Supplier {
   campaigns    Campaign[]
   numbers      PhoneNumber[]
   callSessions CallSession[]
+  leads        Lead[]
+  ringPools    RingPool[]
+  trafficSources TrafficSource[]
 
   @@index([status])
   @@map("suppliers")
@@ -122,6 +300,7 @@ model Buyer {
   offers           Offer[]
   callSessions     CallSession[]
   conversionEvents ConversionEvent[]
+  routingExceptions RoutingException[]
 
   @@index([status])
   @@map("buyers")
@@ -143,6 +322,12 @@ model Campaign {
   offers       Offer[]
   numbers      PhoneNumber[]
   callSessions CallSession[]
+  retargetLists RetargetList[]
+  leads        Lead[]
+  smsBlasts    SmsBlast[]
+  ringPools    RingPool[]
+  leadImportJobs LeadImportJob[]
+  routingExceptions RoutingException[]
 
   @@index([status])
   @@index([supplierId])
@@ -181,6 +366,7 @@ model PhoneNumber {
   e164                  String                @unique
   campaignId            String                @map("campaign_id")
   supplierId            String                @map("supplier_id")
+  ringPoolId            String?               @map("ring_pool_id")
   poolType              PoolType              @map("pool_type")
   status                Status                @default(ACTIVE)
   trustProfileId        String?               @map("trust_profile_id")
@@ -191,10 +377,13 @@ model PhoneNumber {
   // Relations
   campaign Campaign @relation(fields: [campaignId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
+  ringPool RingPool? @relation(fields: [ringPoolId], references: [id])
+  messagingRegistrations MessagingRegistration[]
 
   @@index([campaignId])
   @@index([supplierId])
   @@index([campaignId, supplierId])
+  @@index([ringPoolId])
   @@map("phone_numbers")
 }
 
@@ -210,6 +399,7 @@ model CallSession {
   supplierId              String            @map("supplier_id")
   buyerId                 String?           @map("buyer_id")
   offerId                 String?           @map("offer_id")
+  trafficSourceId         String?           @map("traffic_source_id")
 
   status                  CallStatus
 
@@ -240,14 +430,21 @@ model CallSession {
   supplier        Supplier        @relation(fields: [supplierId], references: [id])
   buyer           Buyer?          @relation(fields: [buyerId], references: [id])
   offer           Offer?          @relation(fields: [offerId], references: [id])
+  trafficSource   TrafficSource?  @relation(fields: [trafficSourceId], references: [id])
   conversionEvents ConversionEvent[]
   aiJobs          CallAiJob[]
+  callbackRequests CallbackRequest[]
+  voicemails      Voicemail[]
+  smsMessages     SmsMessage[]
+  systemLogs      SystemLog[]
+  routingExceptions RoutingException[]
 
   // Reporting & routing-friendly indexes
   @@index([campaignId, createdAt])
   @@index([supplierId, createdAt])
   @@index([buyerId, createdAt])
   @@index([status])
+  @@index([trafficSourceId])
   @@map("call_sessions")
 }
 
@@ -283,4 +480,520 @@ model CallAiJob {
 
   @@index([callSessionId, jobType, status])
   @@map("call_ai_jobs")
+}
+
+model Alert {
+  id               String        @id @default(cuid())
+  title            String
+  description      String?
+  severity         AlertSeverity
+  status           AlertStatus   @default(OPEN)
+  category         String?
+  affectedResource String?       @map("affected_resource")
+  slaMinutes       Int?          @map("sla_minutes")
+  openedAt         DateTime      @default(now()) @map("opened_at")
+  ackedAt          DateTime?     @map("acked_at")
+  ackedBy          String?       @map("acked_by")
+  resolvedAt       DateTime?     @map("resolved_at")
+  metadata         Json?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([status, severity])
+  @@map("alerts")
+}
+
+model Notice {
+  id            String         @id @default(cuid())
+  title         String
+  body          String
+  category      NoticeCategory
+  effectiveAt   DateTime       @map("effective_at")
+  expiresAt     DateTime?      @map("expires_at")
+  attachmentUrl String?        @map("attachment_url")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@index([effectiveAt])
+  @@map("notices")
+}
+
+model PlatformMigration {
+  id            String                @id @default(cuid())
+  sourceSystem  String                @map("source_system")
+  targetSystem  String                @map("target_system")
+  owner         String
+  phase         PlatformMigrationPhase
+  risk          PlatformMigrationRisk
+  cutoverDate   DateTime              @map("cutover_date")
+  summary       String?
+  dependencies  Json?
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([phase, risk])
+  @@map("platform_migrations")
+}
+
+model WebhookLog {
+  id            String           @id @default(cuid())
+  direction     WebhookDirection
+  event         String
+  url           String
+  statusCode    Int              @map("status_code")
+  latencyMs     Int              @map("latency_ms")
+  payloadDigest String           @map("payload_digest")
+  traceId       String?          @map("trace_id")
+  metadata      Json?
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  @@index([direction, createdAt])
+  @@map("webhook_logs")
+}
+
+model SystemLog {
+  id            String      @id @default(cuid())
+  component     String
+  severity      LogSeverity
+  message       String
+  traceId       String?     @map("trace_id")
+  callSessionId String?     @map("call_session_id")
+  metadata      Json?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  callSession CallSession? @relation(fields: [callSessionId], references: [id])
+
+  @@index([component, severity, createdAt])
+  @@map("system_logs")
+}
+
+model BillingStatement {
+  id                     String          @id @default(cuid())
+  periodStart            DateTime        @map("period_start")
+  periodEnd              DateTime        @map("period_end")
+  totalCostCents         Int             @map("total_cost_cents")
+  paymentsAppliedCents   Int             @default(0) @map("payments_applied_cents")
+  balanceCents           Int             @default(0) @map("balance_cents")
+  pdfUrl                 String?         @map("pdf_url")
+  status                 StatementStatus @default(OPEN)
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+
+  payments BillingPayment[]
+
+  @@index([periodStart, periodEnd])
+  @@map("billing_statements")
+}
+
+model BillingPayment {
+  id           String        @id @default(cuid())
+  statementId  String?       @map("statement_id")
+  amountCents  Int           @map("amount_cents")
+  method       String
+  reference    String?
+  status       PaymentStatus @default(PENDING)
+  receivedAt   DateTime      @map("received_at")
+  note         String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  statement BillingStatement? @relation(fields: [statementId], references: [id])
+
+  @@index([statementId, receivedAt])
+  @@map("billing_payments")
+}
+
+model CarrierRate {
+  id                      String   @id @default(cuid())
+  carrier                 String
+  countryCode             String   @map("country_code")
+  prefix                  String
+  voiceInboundRateMicro   Int      @map("voice_inbound_rate_micro")
+  voiceOutboundRateMicro  Int      @map("voice_outbound_rate_micro")
+  smsRateMicro            Int      @map("sms_rate_micro")
+  effectiveAt             DateTime @map("effective_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@index([carrier, countryCode])
+  @@map("carrier_rates")
+}
+
+model SecretItem {
+  id            String      @id @default(cuid())
+  label         String
+  owner         String
+  scope         SecretScope
+  rotationDueAt DateTime    @map("rotation_due_at")
+  maskedValue   String      @map("masked_value")
+  notes         String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@index([scope, rotationDueAt])
+  @@map("secret_items")
+}
+
+model Team {
+  id            String    @id @default(cuid())
+  name          String
+  purpose       String?
+  pagerNumber   String?   @map("pager_number")
+  onCallContact String?   @map("on_call_contact")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  members TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  teamId     String?  @map("team_id")
+  name       String
+  role       TeamRole
+  email      String?
+  avatarUrl  String?  @map("avatar_url")
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  team Team? @relation(fields: [teamId], references: [id])
+
+  @@index([teamId, role])
+  @@map("team_members")
+}
+
+model SecurityPreference {
+  id                   String   @id @default(cuid())
+  mfaRequired          Boolean  @map("mfa_required")
+  ipAllowList          Json?    @map("ip_allow_list")
+  lastAuditAt          DateTime? @map("last_audit_at")
+  webhookSigningSecret String?  @map("webhook_signing_secret")
+  apiKeyRotationDays   Int      @default(90) @map("api_key_rotation_days")
+  defaultRecordingEnabled Boolean @default(true) @map("default_recording_enabled")
+  cdrRetentionDays      Int      @default(365) @map("cdr_retention_days")
+  defaultBuyerCap       Int?     @map("default_buyer_cap")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("security_preferences")
+}
+
+model WebhookSubscription {
+  id              String  @id @default(cuid())
+  event           String
+  url             String
+  secret          String
+  status          Status  @default(ACTIVE)
+  failureCount    Int     @default(0) @map("failure_count")
+  lastDeliveredAt DateTime? @map("last_delivered_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([event, status])
+  @@map("webhook_subscriptions")
+}
+
+model ProviderAccount {
+  id                 String        @id @default(cuid())
+  type               ProviderType
+  label              String
+  status             ProviderStatus @default(HEALTHY)
+  lastHeartbeatAt    DateTime?     @map("last_heartbeat_at")
+  credentialRef      String?       @map("credential_ref")
+  region             String?
+  failoverPreference Int           @default(1) @map("failover_preference")
+  capacityShare      Int           @default(50) @map("capacity_share")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@map("provider_accounts")
+}
+
+model IntegrationConfig {
+  id               String             @id @default(cuid())
+  name             String
+  category         IntegrationCategory
+  status           IntegrationStatus  @default(NOT_CONFIGURED)
+  connected        Boolean            @default(false)
+  lastSyncAt       DateTime?          @map("last_sync_at")
+  documentationUrl String?            @map("documentation_url")
+  installUrl       String?            @map("install_url")
+  description      String?
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@map("integration_configs")
+}
+
+model AdminApiKey {
+  id            String   @id @default(cuid())
+  label         String
+  tokenPreview  String   @map("token_preview")
+  scopes        String[]
+  lastUsedAt    DateTime? @map("last_used_at")
+  expiresAt     DateTime? @map("expires_at")
+  status        Status   @default(ACTIVE)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_api_keys")
+}
+
+model RetargetList {
+  id            String              @id @default(cuid())
+  name          String
+  campaignId    String?             @map("campaign_id")
+  size          Int                 @default(0)
+  healthScore   Int                 @default(100) @map("health_score")
+  lastPushAt    DateTime?           @map("last_push_at")
+  status        RetargetListStatus  @default(HEALTHY)
+  rules         Json?
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  campaign   Campaign?  @relation(fields: [campaignId], references: [id])
+  leads      Lead[]
+
+  @@map("retarget_lists")
+}
+
+model Lead {
+  id             String      @id @default(cuid())
+  campaignId     String?     @map("campaign_id")
+  supplierId     String?     @map("supplier_id")
+  retargetListId String?     @map("retarget_list_id")
+  firstName      String?     @map("first_name")
+  lastName       String?     @map("last_name")
+  phone          String?
+  stage          LeadStage   @default(NEW)
+  source         String?
+  score          Int?
+  assignedTo     String?     @map("assigned_to")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  campaign     Campaign?    @relation(fields: [campaignId], references: [id])
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id])
+  retargetList RetargetList? @relation(fields: [retargetListId], references: [id])
+  events       LeadEvent[]
+  smsMessages  SmsMessage[]
+
+  @@index([stage, createdAt])
+  @@map("leads")
+}
+
+model LeadEvent {
+  id        String   @id @default(cuid())
+  leadId    String   @map("lead_id")
+  eventType String   @map("event_type")
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@map("lead_events")
+}
+
+model LeadImportJob {
+  id             String        @id @default(cuid())
+  source         String
+  campaignId     String?       @map("campaign_id")
+  status         ImportStatus  @default(PENDING)
+  rowsTotal      Int           @default(0) @map("rows_total")
+  rowsImported   Int           @default(0) @map("rows_imported")
+  errorCount     Int           @default(0) @map("error_count")
+  errorReportUrl String?       @map("error_report_url")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  completedAt    DateTime?     @map("completed_at")
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+
+  @@map("lead_import_jobs")
+}
+
+model SmsBlast {
+  id            String      @id @default(cuid())
+  name          String
+  campaignId    String?     @map("campaign_id")
+  status        BlastStatus @default(DRAFT)
+  audienceSize  Int         @default(0) @map("audience_size")
+  template      String
+  scheduledAt   DateTime?   @map("scheduled_at")
+  sentCount     Int         @default(0) @map("sent_count")
+  failedCount   Int         @default(0) @map("failed_count")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  campaign Campaign?    @relation(fields: [campaignId], references: [id])
+  sends    SmsBlastSend[]
+
+  @@map("sms_blasts")
+}
+
+model SmsBlastSend {
+  id          String    @id @default(cuid())
+  blastId     String    @map("blast_id")
+  phone       String
+  status      SmsStatus @default(QUEUED)
+  deliveredAt DateTime? @map("delivered_at")
+  errorReason String?   @map("error_reason")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  blast SmsBlast @relation(fields: [blastId], references: [id])
+
+  @@index([blastId])
+  @@map("sms_blast_sends")
+}
+
+model SmsMessage {
+  id            String       @id @default(cuid())
+  direction     SmsDirection
+  phone         String
+  status        SmsStatus
+  body          String
+  leadId        String?      @map("lead_id")
+  callSessionId String?      @map("call_session_id")
+  occurredAt    DateTime     @map("occurred_at")
+  metadata      Json?
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  callSession CallSession? @relation(fields: [callSessionId], references: [id])
+
+  @@index([direction, occurredAt])
+  @@map("sms_messages")
+}
+
+model MessagingRegistration {
+  id             String   @id @default(cuid())
+  phoneNumberId  String   @map("phone_number_id")
+  channel        String
+  a2pBrandId     String?  @map("a2p_brand_id")
+  a2pCampaignId  String?  @map("a2p_campaign_id")
+  status         Status   @default(ACTIVE)
+  lastSyncedAt   DateTime? @map("last_synced_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  phoneNumber PhoneNumber @relation(fields: [phoneNumberId], references: [id])
+
+  @@index([channel])
+  @@map("messaging_registrations")
+}
+
+model SmsOptOut {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique @map("phone_number")
+  source      String
+  optedOutAt  DateTime @map("opted_out_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("sms_opt_outs")
+}
+
+model CallbackRequest {
+  id            String         @id @default(cuid())
+  callSessionId String         @map("call_session_id")
+  status        CallbackStatus @default(OPEN)
+  priority      Int            @default(1)
+  assignedTo    String?        @map("assigned_to")
+  notes         String?
+  dueAt         DateTime?      @map("due_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  callSession CallSession @relation(fields: [callSessionId], references: [id])
+
+  @@index([status, priority])
+  @@map("callback_requests")
+}
+
+model Voicemail {
+  id            String         @id @default(cuid())
+  callSessionId String         @map("call_session_id")
+  status        VoicemailStatus @default(NEW)
+  recordingUrl  String         @map("recording_url")
+  transcription String?
+  assignedTo    String?        @map("assigned_to")
+  receivedAt    DateTime       @map("received_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  callSession CallSession @relation(fields: [callSessionId], references: [id])
+
+  @@index([status, receivedAt])
+  @@map("voicemails")
+}
+
+model RingPool {
+  id           String      @id @default(cuid())
+  campaignId   String?     @map("campaign_id")
+  supplierId   String?     @map("supplier_id")
+  label        String
+  mode         RingPoolMode @default(STATIC)
+  targetSize   Int         @default(0) @map("target_size")
+  healthyCount Int         @default(0) @map("healthy_count")
+  notes        String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id])
+  supplier    Supplier?    @relation(fields: [supplierId], references: [id])
+  phoneNumbers PhoneNumber[]
+
+  @@index([campaignId, supplierId])
+  @@map("ring_pools")
+}
+
+model ScheduleRule {
+  id           String             @id @default(cuid())
+  targetType   ScheduleTargetType @map("target_type")
+  targetId     String             @map("target_id")
+  timezone     String
+  daysOfWeek   Int[]              @map("days_of_week")
+  startMinutes Int                @map("start_minutes")
+  endMinutes   Int                @map("end_minutes")
+  status       Status             @default(ACTIVE)
+  metadata     Json?
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@index([targetType, targetId])
+  @@map("schedule_rules")
+}
+
+model TrafficSource {
+  id          String   @id @default(cuid())
+  name        String
+  channel     String
+  supplierId  String?  @map("supplier_id")
+  cplCents    Int?     @map("cpl_cents")
+  status      Status   @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id])
+  callSessions CallSession[]
+
+  @@map("traffic_sources")
+}
+
+model RoutingException {
+  id            String               @id @default(cuid())
+  callSessionId String?              @map("call_session_id")
+  campaignId    String?              @map("campaign_id")
+  buyerId       String?              @map("buyer_id")
+  type          RoutingExceptionType
+  message       String?
+  occurredAt    DateTime             @map("occurred_at")
+  metadata      Json?
+
+  callSession CallSession? @relation(fields: [callSessionId], references: [id])
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id])
+  buyer       Buyer?       @relation(fields: [buyerId], references: [id])
+
+  @@index([occurredAt])
+  @@map("routing_exceptions")
 }

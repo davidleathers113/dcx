@@ -76,6 +76,9 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Manually added banners to echo Trackdrive notice palette */
+  --notice-info: oklch(0.86 0.05 220);
+  --notice-warning: oklch(0.82 0.2 80);
 }
 
 .dark {
@@ -110,6 +113,8 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --notice-info: oklch(0.58 0.1 220);
+  --notice-warning: oklch(0.62 0.18 80);
 }
 
 @layer base {

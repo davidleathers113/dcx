@@ -59,6 +59,14 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - This was manually set after repeated `npm run build` failures when prerender tried to hit `http://localhost:4000` and the API was offline.
 - If you later need SSG, remove the flag and ensure a stable backend (or mock API) is reachable during builds.
 
+## 4. Shared Components & Hooks
+
+- `src/components/dashboard/date-range-toolbar.tsx` – client toolbar that updates the `?range=` query param so all widgets stay in sync with the selected preset.
+- `src/components/dashboard/widgets/*` – reusable stat, widget, and chart shells styled to match the Trackdrive analytics board.
+- `src/components/ui/notice.tsx` – a `NoticeBanner` primitive that the layout uses for the global system alert rail.
+- `src/lib/hooks/usePaginatedResource.ts` – lightweight fetch helper for paginated API endpoints; it powers `useDashboardStats` and can be reused by future tables.
+- `src/lib/hooks/useDashboardStats.ts` – wraps `/api/calls` + `/health` to compute revenue/profit metrics on the client (used by the new top bar balance pill).
+
 ## Learn More
 
 To learn more about the tech stack, take a look at the following resources:

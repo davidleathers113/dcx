@@ -65,7 +65,7 @@ These cURL commands allow you to verify that all major components of the API are
 curl -X POST http://localhost:4000/api/campaigns \
 -H "Content-Type: application/json" \
 -H "Authorization: Bearer your_admin_api_key" \
--d 
+-d
 '{' \
   "name": "National Lead Gen Campaign", \
   "vertical": "Insurance" \
@@ -100,7 +100,7 @@ This simulates a buyer posting back a conversion event for a call. (Note: You wo
 curl -X POST http://localhost:4000/api/conversions \
 -H "Content-Type: application/json" \
 -H "X-API-Key: a_valid_buyer_api_key" \
--d 
+-d
 '{' \
   "call_public_id": "some_public_id_from_a_call", \
   "buyer_id": "a_buyer_id_from_the_call", \
@@ -110,3 +110,17 @@ curl -X POST http://localhost:4000/api/conversions \
 }'
 ```
 > **Expected:** A `404 Not Found` if the `call_public_id` is fake, which is the correct behavior. This proves the endpoint and its security scheme are active.
+
+## 4. Admin Observability & Ops APIs
+
+The following authenticated endpoints now power the admin dashboard screens. All of them are available under `/api` and require the `ADMIN_API_KEY` bearer token:
+
+- `GET /api/performance/routing` & `GET /api/performance/profit` – live routing failover telemetry and profit trend summaries that source directly from `call_sessions`, `routing_exceptions`, and `buyers`.
+- `GET /api/alerts`, `PATCH /api/alerts/:id/ack`, `GET /api/notices` – alerting workflow for routing, carrier, and compliance events plus planned maintenance notices.
+- `GET /api/webhook-logs`, `GET /api/system-logs` – searchable webhook delivery metrics and platform log streams.
+- `GET /api/platform-migrations` / `POST /api/platform-migrations` – TrackDrive cutover roadmap tracking.
+- `GET /api/billing/*` – statements, payments, rates, and usage aggregations sourced from `billing_*` tables.
+- `GET /api/teams`, `/api/team-members`, `/api/secret-items`, `/api/settings/security`, `/api/settings/preferences` – operational metadata for on-call rosters, credential rotation, and security defaults.
+- `GET /api/leads/*`, `/api/sms/*`, `/api/calls/*`, `/api/ring-pools`, `/api/schedules`, `/api/traffic-sources`, `/api/dashboards/schedules` – data services that back every “under construction” admin page.
+
+Each route is implemented as its own Express router in `src/modules/*` and reads from the matching Prisma models introduced in the `20251127055815_admin_pages` migration. Seed data covering these entities ships via `pnpm prisma db seed` so the dashboards render meaningful mock telemetry out of the box.

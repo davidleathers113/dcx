@@ -2,6 +2,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
+import { TopBar } from '@/components/layout/top-bar';
+import { NoticeBanner } from '@/components/ui/notice';
 
 export const metadata: Metadata = {
   title: 'Dependable Call Exchange',
@@ -16,21 +18,26 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full bg-slate-950 text-slate-50 antialiased">
-        <div className="min-h-screen flex">
+        <div className="flex min-h-screen">
           {/* Sidebar (desktop) */}
           <Sidebar />
 
           {/* Main content */}
-          <div className="flex-1 flex flex-col">
-            {/* Top bar (optional, could add user info later) */}
-            <header className="h-12 border-b border-slate-800 bg-slate-950/90 backdrop-blur flex items-center px-4 md:px-6">
-              <div className="text-xs text-slate-500">
-                Dependable Call Exchange ·{' '}
-                <span className="text-slate-300">Admin</span>
-              </div>
-            </header>
+          <div className="flex flex-1 flex-col">
+            <TopBar />
 
-            <main className="flex-1">{children}</main>
+            {/* Manually added notice rail to surface Trackdrive-style alerts */}
+            <section className="border-b border-slate-900 bg-slate-950/70 px-4 py-3 md:px-6">
+              <NoticeBanner
+                title="Signed in successfully."
+                description="All services operational · Next refresh at the top of the hour."
+                action={<span className="text-[10px] uppercase text-slate-200">Live</span>}
+              />
+            </section>
+
+            <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
+              {children}
+            </main>
           </div>
         </div>
       </body>
