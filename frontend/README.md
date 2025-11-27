@@ -53,6 +53,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 -   The main dashboard will show the backend health status.
 -   Navigate to [http://localhost:3000/campaigns](http://localhost:3000/campaigns) to see the campaigns table.
 
+## 3. Build Notes
+
+- Dashboard-focused routes (e.g., `/` and `/campaigns`) export `dynamic = 'force-dynamic'` so Next.js skips build-time prerender calls to the backend.
+- This was manually set after repeated `npm run build` failures when prerender tried to hit `http://localhost:4000` and the API was offline.
+- If you later need SSG, remove the flag and ensure a stable backend (or mock API) is reachable during builds.
+
 ## Learn More
 
 To learn more about the tech stack, take a look at the following resources:

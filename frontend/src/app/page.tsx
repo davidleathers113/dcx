@@ -2,6 +2,9 @@
 import { apiClient } from '@/lib/api';
 import type { components } from '@/types/api';
 
+// Manually forcing dynamic rendering so Next.js builds skip backend-dependent prerender.
+export const dynamic = 'force-dynamic';
+
 // Corrected type name: PaginatedCallSessions
 type PaginatedCallSessions = components['schemas']['PaginatedCallSessions'];
 type CallSession = components['schemas']['CallSession'];

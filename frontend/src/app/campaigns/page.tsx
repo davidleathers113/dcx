@@ -3,6 +3,9 @@ import { apiClient } from '@/lib/api';
 import type { components } from '@/types/api';
 import { CampaignsTable } from '@/components/campaigns/table';
 
+// Manually forcing dynamic rendering so Next.js builds skip backend-dependent prerender.
+export const dynamic = 'force-dynamic';
+
 type Campaign = components['schemas']['Campaign'];
 
 async function getCampaigns(): Promise<Campaign[]> {
