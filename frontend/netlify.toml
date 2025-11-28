@@ -1,0 +1,41 @@
+# Netlify configuration for DCX Frontend (Next.js 16)
+
+[build]
+  # Build command - runs Next.js production build
+  command = "npm run build"
+
+  # Publish directory - Next.js outputs to .next by default, but Netlify needs the whole frontend dir
+  publish = ".next"
+
+  # Base directory - tells Netlify to run commands from /frontend
+  base = "frontend"
+
+[build.environment]
+  # Node version for build
+  NODE_VERSION = "22"
+
+  # Enable Next.js runtime
+  NEXT_RUNTIME = "nodejs"
+
+# Redirect API calls to backend (configure after backend deployment)
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://your-backend-url.com/api/:splat"
+#   status = 200
+#   force = true
+#   headers = {X-From = "Netlify"}
+
+# SPA fallback for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

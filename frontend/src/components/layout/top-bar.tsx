@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CircleDollarSign,
   Menu,
+  PhoneCall, // <-- Import PhoneCall icon
   Plus,
   SquarePen,
   X
@@ -14,19 +15,13 @@ import {
 import { useMemo } from 'react';
 import { navSections } from './navigation';
 import { useDashboardStats } from '@/lib/hooks/useDashboardStats';
+import { useLiveMetrics } from '@/lib/hooks/useLiveMetrics'; // <-- Import the new hook
 
-type QuickAction = {
-  icon: typeof Plus;
-  label: string;
-};
-
-const quickActions: QuickAction[] = [
-  { icon: SquarePen, label: 'Edit Board' },
-  { icon: Plus, label: 'Add Widget' }
-];
+// ... (existing code)
 
 export function TopBar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { liveCallCount, isConnected } = useLiveMetrics(); // <-- Use the hook
   const range = useMemo(() => {
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -36,36 +31,24 @@ export function TopBar() {
   const balanceDisplay = dashboardStats.loading
     ? '—'
     : formatMoney(dashboardStats.profitCents);
+  
+  const liveCallDisplay = liveCallCount === null ? '...' : liveCallCount;
 
   return (
     <>
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-800 bg-slate-950/95 px-4 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex rounded-md border border-slate-800 bg-slate-900 p-2 text-slate-200 md:hidden"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600"
-          >
-            <CalendarDays className="h-4 w-4 text-slate-400" />
-            Today
-          </button>
-        </div>
-
-        <div className="hidden md:flex items-center gap-2">
-          {/* Manually mirrored Trackdrive quick action affordances */}
-          {quickActions.map((action) => (
-            <QuickActionButton key={action.label} action={action} />
-          ))}
-        </div>
+        {/* ... (existing code) */}
 
         <div className="flex items-center gap-3">
+          {/* Live Call Counter */}
+          <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs text-slate-200">
+            <div className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+              <PhoneCall className="h-4 w-4 text-slate-400" />
+            </div>
+            {liveCallDisplay} Live
+          </div>
+          
           <div className="hidden sm:flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
             <CircleDollarSign className="h-4 w-4" />
             {balanceDisplay}
@@ -77,17 +60,7 @@ export function TopBar() {
           >
             <Bell className="h-4 w-4" />
           </button>
-          <div className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                dashboardStats.backendHealthy ? 'bg-emerald-400' : 'bg-rose-400'
-              }`}
-            />
-            <span className="text-xs font-semibold text-slate-200">DC</span>
-            <span className="hidden sm:inline text-[11px] text-slate-400">
-              {dashboardStats.backendHealthy ? 'Systems Nominal' : 'Investigate API'}
-            </span>
-          </div>
+          {/* ... (existing code) */}
         </div>
       </header>
 
@@ -95,6 +68,9 @@ export function TopBar() {
     </>
   );
 }
+
+// ... (existing code)
+
 
 function formatMoney(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;

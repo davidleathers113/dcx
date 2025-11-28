@@ -1,40 +1,39 @@
 // frontend/src/app/campaigns/page.tsx
-import { apiClient } from '@/lib/api';
-import type { components } from '@/types/api';
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+import { useCampaigns } from '@/lib/hooks/useCampaigns';
 import { CampaignsTable } from '@/components/campaigns/table';
+import { CampaignFilterSidebar } from '@/components/campaigns/campaign-filter-sidebar';
+import { useMemo } from 'react';
 
-// Manually forcing dynamic rendering so Next.js builds skip backend-dependent prerender.
-export const dynamic = 'force-dynamic';
+export default function CampaignsPage() {
+  const searchParams = useSearchParams();
+  
+  // Create a filters object from the search params
+  const filters = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    const filtersObj: Record<string, string> = {};
+    params.forEach((value, key) => {
+        // The key from URLSearchParams might be 'filters[status]'
+        // We just pass the whole object to the hook
+        const match = key.match(/filters\[(.*?)\]/);
+        if (match) {
+            filtersObj[match[1]] = value;
+        }
+    });
+    return filtersObj;
+  }, [searchParams]);
 
-type Campaign = components['schemas']['Campaign'];
-
-async function getCampaigns(): Promise<Campaign[]> {
-  const { data, error } = await apiClient.GET('/api/campaigns', {
-    params: {
-      query: {
-        page: 1,
-        limit: 50
-      }
-    }
-  });
-
-  if (error) {
-    console.error('Error fetching campaigns:', error);
-    return [];
-  }
-
-  return (data?.data ?? []) as Campaign[];
-}
-
-export default async function CampaignsPage() {
-  const campaigns = await getCampaigns();
-  const activeCount = campaigns.filter((c) => c.status === 'ACTIVE').length;
-  const inactiveCount = campaigns.filter((c) => c.status === 'INACTIVE').length;
-  const verticals = new Set(campaigns.map((c) => c.vertical));
+  const { campaigns, loading, error } = useCampaigns(filters);
+  
+  const activeCount = useMemo(() => campaigns.filter((c) => c.status === 'ACTIVE').length, [campaigns]);
+  const inactiveCount = useMemo(() => campaigns.filter((c) => c.status === 'INACTIVE').length, [campaigns]);
+  const verticals = useMemo(() => new Set(campaigns.map((c) => c.vertical)), [campaigns]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <div className="mx-auto max-w-7xl px-6 py-8">
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Campaigns</h1>
@@ -53,7 +52,7 @@ export default async function CampaignsPage() {
           </div>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <SummaryCard label="Active" value={activeCount} helper="Currently routing calls" />
           <SummaryCard
             label="Inactive"
@@ -67,9 +66,18 @@ export default async function CampaignsPage() {
           />
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 shadow-sm">
-          <CampaignsTable campaigns={campaigns} />
-        </section>
+        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-4">
+            <div className="lg:col-span-1">
+                <CampaignFilterSidebar />
+            </div>
+            <div className="lg:col-span-3">
+                <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 shadow-sm">
+                  {loading && <div className="text-center p-8">Loading campaigns...</div>}
+                  {error && <div className="text-center p-8 text-rose-400">Error loading campaigns.</div>}
+                  {!loading && !error && <CampaignsTable campaigns={campaigns} />}
+                </section>
+            </div>
+        </div>
       </div>
     </main>
   );

@@ -7,6 +7,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import createError from 'http-errors';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import { PrismaClient } from '@prisma/client';
 
 import { telephonyRouter } from './modules/telephony/telephony.controller';
 import { routingRouter } from './modules/routing/routing.controller';
@@ -30,6 +33,7 @@ import { schedulesRouter } from './modules/schedules/schedules.controller';
 import { trafficRouter } from './modules/traffic/traffic.controller';
 
 const app = express();
+const prisma = new PrismaClient();
 
 // Trust proxy if you're behind a load balancer (important for Twilio URL calculation)
 app.set('trust proxy', true);
@@ -109,9 +113,83 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(status).json(response);
 });
 
-// Start server
+// --- WebSocket Server Setup ---
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+
+const liveMetricsClients = new Set<import('ws')>();
+const liveCallsClients = new Set<import('ws')>();
+
+wss.on('connection', (ws, req) => {
+  const url = req.url;
+  console.log(`Client connected to ${url}`);
+
+  if (url === '/ws/live-metrics') {
+    liveMetricsClients.add(ws);
+    getLiveCallCount().then(count => {
+      ws.send(JSON.stringify({ type: 'live-call-count', count }));
+    });
+    ws.on('close', () => {
+      console.log('Live metrics client disconnected');
+      liveMetricsClients.delete(ws);
+    });
+  } else if (url === '/ws/live-calls') {
+    liveCallsClients.add(ws);
+    getLiveCalls().then(calls => {
+        ws.send(JSON.stringify({ type: 'live-calls', calls }));
+    });
+    ws.on('close', () => {
+      console.log('Live calls client disconnected');
+      liveCallsClients.delete(ws);
+    });
+  } else {
+    ws.close(1011, 'Unsupported endpoint');
+  }
+});
+
+async function getLiveCallCount() {
+    return prisma.callSession.count({
+        where: { status: { in: ['IN_PROGRESS', 'RINGING'] } },
+    });
+}
+
+async function getLiveCalls() {
+    return prisma.callSession.findMany({
+        where: { status: { in: ['IN_PROGRESS', 'RINGING'] } },
+        include: {
+            buyer: { select: { id: true, name: true } },
+            campaign: { select: { id: true, name: true, vertical: true } },
+            trafficSource: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+}
+
+// TODO: Replace polling with a Redis pub/sub model for better performance
+setInterval(async () => {
+  const count = await getLiveCallCount();
+  const message = JSON.stringify({ type: 'live-call-count', count });
+  liveMetricsClients.forEach(client => {
+    if (client.readyState === 1) { // OPEN
+      client.send(message);
+    }
+  });
+}, 2000);
+
+setInterval(async () => {
+  const calls = await getLiveCalls();
+  const message = JSON.stringify({ type: 'live-calls', calls });
+  liveCallsClients.forEach(client => {
+    if (client.readyState === 1) { // OPEN
+      client.send(message);
+    }
+  });
+}, 2000);
+
+
+// --- Start Server ---
 const PORT = env.PORT;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`DCX backend listening on port ${PORT} (${env.NODE_ENV})`);
 });

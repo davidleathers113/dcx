@@ -1,54 +1,67 @@
-import { ResourceDashboard } from '@/components/dashboard/resource-dashboard';
-import { apiFetch } from '@/lib/api';
-import type { DashboardResponse } from '@/types/dashboard';
+// frontend/src/app/calls/voicemail/page.tsx
+'use client';
 
-type Voicemail = {
-  id: string;
-  status: string;
-  recordingUrl: string;
-  transcription?: string | null;
-  assignedTo?: string | null;
-  receivedAt: string;
-  callId?: string | null;
-};
+import { useVoicemails } from '@/lib/hooks/useVoicemails';
+import { VoicemailCard } from '@/components/calls/voicemail-card';
+import { Inbox } from 'lucide-react';
 
-async function getData(): Promise<DashboardResponse> {
-  const voicemails = await apiFetch<Voicemail[]>('/api/calls/voicemails');
-  return {
-    title: 'Voicemails',
-    description: 'Transcriptions and ownership for return calls.',
-    generatedAt: new Date().toISOString(),
-    stats: [
-      {
-        label: 'Awaiting Review',
-        value: voicemails.filter((vm) => vm.status !== 'ARCHIVED').length.toString(),
-        helper: `${voicemails.length} total`,
-        accent: 'amber'
-      }
-    ],
-    tables: [
-      {
-        id: 'voicemails-table',
-        title: 'Voicemails',
-        columns: [
-          { key: 'time', label: 'Received' },
-          { key: 'call', label: 'Call' },
-          { key: 'status', label: 'Status' },
-          { key: 'owner', label: 'Owner' }
-        ],
-        rows: voicemails.map((vm) => ({
-          id: vm.id,
-          time: new Date(vm.receivedAt).toLocaleString(),
-          call: vm.callId ?? '—',
-          status: vm.status,
-          owner: vm.assignedTo ?? 'Unassigned'
-        }))
-      }
-    ]
+export default function VoicemailsPage() {
+  const { voicemails, loading, error, assignVoicemail, scheduleCallback } = useVoicemails();
+
+  const handleAssign = async (voicemailId: string, teamMemberId: string) => {
+    try {
+      // In a real app, you'd have a modal to select a team member.
+      // For now, we'll use a placeholder.
+      await assignVoicemail(voicemailId, teamMemberId);
+      alert('Voicemail assigned!');
+    } catch (e) {
+      alert('Failed to assign voicemail.');
+    }
   };
-}
 
-export default async function VoicemailPage() {
-  const data = await getData();
-  return <ResourceDashboard data={data} />;
+  const handleScheduleCallback = async (voicemailId: string) => {
+    try {
+      await scheduleCallback(voicemailId);
+      alert('Callback scheduled!');
+    } catch (e) {
+      alert('Failed to schedule callback.');
+    }
+  };
+  
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Voicemail Inbox</h1>
+          <p className="text-sm text-slate-400">
+            Review, assign, and schedule callbacks for voicemails.
+          </p>
+        </header>
+
+        {loading && <div className="text-center p-12">Loading voicemails...</div>}
+        {error && <div className="text-center p-12 text-rose-400">Error loading voicemails.</div>}
+
+        {!loading && !error && voicemails.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-80 border border-dashed border-slate-700 rounded-xl">
+                <Inbox className="h-16 w-16 text-slate-600" />
+                <h3 className="mt-4 text-xl font-semibold text-slate-300">Inbox is Empty</h3>
+                <p className="text-sm text-slate-500">All voicemails have been handled.</p>
+            </div>
+        )}
+
+        {!loading && !error && voicemails.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {voicemails.map(vm => (
+                    <VoicemailCard 
+                        key={vm.id} 
+                        voicemail={vm}
+                        onAssign={handleAssign}
+                        onScheduleCallback={handleScheduleCallback}
+                    />
+                ))}
+            </div>
+        )}
+      </div>
+    </main>
+  );
 }

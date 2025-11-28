@@ -238,6 +238,11 @@ enum VoicemailStatus {
   ARCHIVED
 }
 
+enum VoicemailPriority {
+  NORMAL
+  HIGH
+}
+
 enum RingPoolMode {
   STATIC
   DYNAMIC
@@ -296,13 +301,34 @@ model Buyer {
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
+  // Tier-based routing
+  tier             Int          @default(0)
+
+  // Revenue Caps
+  dailyCapRevenueCents    Int?     @map("daily_cap_revenue_cents")
+  revenueCapDailyCents    Int?     @map("revenue_cap_daily_cents")
+  revenueCapMonthlyCents  Int?     @map("revenue_cap_monthly_cents")
+  revenueCapTotalCents    Int?     @map("revenue_cap_total_cents")
+  revenueUsedDailyCents   Int      @default(0) @map("revenue_used_daily_cents")
+  revenueUsedMonthlyCents Int      @default(0) @map("revenue_used_monthly_cents")
+  revenueUsedTotalCents   Int      @default(0) @map("revenue_used_total_cents")
+
+  // Converted Caps
+  convertedMonthlyLimit   Int?     @map("converted_monthly_limit")
+  convertedTotalLimit     Int?     @map("converted_total_limit")
+  convertedMonthlyUsed    Int      @default(0) @map("converted_monthly_used")
+  convertedTotalUsed      Int      @default(0) @map("converted_total_used")
+
+  // Other fields
+  notes            String?
+
   // Relations
   offers           Offer[]
   callSessions     CallSession[]
   conversionEvents ConversionEvent[]
   routingExceptions RoutingException[]
 
-  @@index([status])
+  @@index([status, tier])
   @@map("buyers")
 }
 
@@ -317,6 +343,12 @@ model Campaign {
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
+  // New fields from analysis
+  shortId                 String?  @unique @map("short_id")
+  leadsApiKey             String?  @unique @map("leads_api_key")
+  numbersApiKey           String?  @unique @map("numbers_api_key")
+  enablePublicPosting     Boolean  @default(false) @map("enable_public_posting")
+
   // Relations
   supplier     Supplier?   @relation(fields: [supplierId], references: [id])
   offers       Offer[]
@@ -328,6 +360,7 @@ model Campaign {
   ringPools    RingPool[]
   leadImportJobs LeadImportJob[]
   routingExceptions RoutingException[]
+  auditLogs    CampaignAuditLog[]
 
   @@index([status])
   @@index([supplierId])
@@ -366,6 +399,7 @@ model PhoneNumber {
   e164                  String                @unique
   campaignId            String                @map("campaign_id")
   supplierId            String                @map("supplier_id")
+  trafficSourceId       String?               @map("traffic_source_id")
   ringPoolId            String?               @map("ring_pool_id")
   poolType              PoolType              @map("pool_type")
   status                Status                @default(ACTIVE)
@@ -375,14 +409,15 @@ model PhoneNumber {
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
   // Relations
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  supplier Supplier @relation(fields: [supplierId], references: [id])
-  ringPool RingPool? @relation(fields: [ringPoolId], references: [id])
+  campaign      Campaign      @relation(fields: [campaignId], references: [id])
+  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  trafficSource TrafficSource? @relation(fields: [trafficSourceId], references: [id])
+  ringPool      RingPool?     @relation(fields: [ringPoolId], references: [id])
   messagingRegistrations MessagingRegistration[]
 
   @@index([campaignId])
   @@index([supplierId])
-  @@index([campaignId, supplierId])
+  @@index([trafficSourceId])
   @@index([ringPoolId])
   @@map("phone_numbers")
 }
@@ -659,6 +694,7 @@ model TeamMember {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   team Team? @relation(fields: [teamId], references: [id])
+  voicemails Voicemail[]
 
   @@index([teamId, role])
   @@map("team_members")
@@ -912,16 +948,20 @@ model CallbackRequest {
 }
 
 model Voicemail {
-  id            String         @id @default(cuid())
-  callSessionId String         @map("call_session_id")
-  status        VoicemailStatus @default(NEW)
-  recordingUrl  String         @map("recording_url")
-  transcription String?
-  assignedTo    String?        @map("assigned_to")
-  receivedAt    DateTime       @map("received_at")
-  createdAt     DateTime       @default(now()) @map("created_at")
+  id                  String            @id @default(cuid())
+  callSessionId       String            @map("call_session_id")
+  status              VoicemailStatus   @default(NEW)
+  priority            VoicemailPriority @default(NORMAL)
+  recordingUrl        String            @map("recording_url")
+  transcription       String?
+  assignedToId        String?           @map("assigned_to_id")
+  receivedAt          DateTime          @map("received_at")
+  notes               String?
+  callbackScheduledAt DateTime?         @map("callback_scheduled_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
 
   callSession CallSession @relation(fields: [callSessionId], references: [id])
+  assignedTo  TeamMember? @relation(fields: [assignedToId], references: [id])
 
   @@index([status, receivedAt])
   @@map("voicemails")
@@ -974,8 +1014,22 @@ model TrafficSource {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // New fields from analysis
+  shortId           String?   @unique @map("short_id")
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  company           String?
+  email             String?
+  phone             String?
+  notes             String?
+  numberLimit       Int?      @map("number_limit")
+  lastCallAt        DateTime? @map("last_call_at")
+  callCount         Int       @default(0) @map("call_count")
+  recentCallCount   Int       @default(0) @map("recent_call_count")
+
   supplier     Supplier?    @relation(fields: [supplierId], references: [id])
   callSessions CallSession[]
+  phoneNumbers PhoneNumber[]
 
   @@map("traffic_sources")
 }
@@ -996,4 +1050,20 @@ model RoutingException {
 
   @@index([occurredAt])
   @@map("routing_exceptions")
+}
+
+model CampaignAuditLog {
+  id           String   @id @default(cuid())
+  campaignId   String   @map("campaign_id")
+  userId       String?  @map("user_id") // Or whatever user identifier you have
+  action       String
+  reason       String?
+  details      Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  // user     User     @relation(fields: [userId], references: [id])
+
+  @@index([campaignId])
+  @@map("campaign_audit_logs")
 }

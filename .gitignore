@@ -54,6 +54,8 @@ logs/
 # Framework / tooling specifics
 .vercel/
 frontend/.vercel/
+.netlify/
+frontend/.netlify/
 .prisma/
 prisma/dev.db
 prisma/dev.db-journal
